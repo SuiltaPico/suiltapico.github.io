@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nothing</title>
+    <style>
+        html,
+        body,
+        #sub_frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: none;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
+    <script src="/js/tools.js"></script>
+</head>
+
+<body>
+    <iframe id="sub_frame" frameborder="0"></iframe>
+    <script>
+        /**
+         * @param {string[]} recordedPages
+         */
+        function _main(recordedPages) {
+            /// {HTMLIFrameElement}
+            let sub_frame = document.getElementById("sub_frame");
+            // {document}
+            let sub_frame_document = sub_frame.contentDocument
+
+            // 如果 list.json 里面没有数据，则在 sub_frame 输出 Nothing.
+            if (recordedPages.length == 0) {
+                sub_frame_document.body.innerText = "Nothing."
+                return
+            }
+
+            // 读取访问记录（访问记录是个 HashMap ，在这里选用对象）
+            let access_record;
+
+            try {
+                access_record = JSON.parse(localStorage.getItem("access_record"))
+                access_record == null ? access_record = {} : 0
+            } catch (e) {
+                let null_json_data = JSON.stringify({})
+                localStorage.setItem("access_record", null_json_data)
+                access_record = {}
+            }
+
+            // 生成数组并对访问过的网页进行降权，访问过的网页权自除以2
+            let name_and_weight_set_list = []
+            let weight_sum = 0.
+            recordedPages.forEach(element => {
+                let weight = 1
+                if (access_record[element] != undefined && Number.isInteger(access_record[element])) {
+                    weight /= Math.pow(2, access_record[element])
+                }
+                name_and_weight_set_list.push([element, weight])
+                weight_sum += weight
+            });
+
+            // 随机选择到时数字
+            let key_number = randInRange(0, weight_sum)
+            // 权重统计
+            let weight_counter = 0.
+            for (const item of name_and_weight_set_list) {
+                if (key_number >= weight_counter && key_number < weight_counter + item[1]) {
+                    sub_frame.setAttribute("src", item[0])
+
+                    access_record[item[0]] == undefined ? 
+                        access_record[item[0]] = 1 
+                    : 
+                        access_record[item[0]] >= 10 ? 
+                            access_record[item[0]] = 0 
+                        :
+                            access_record[item[0]] += 1
+                    
+                    localStorage.setItem("access_record", JSON.stringify(access_record))
+                    break
+                } else {
+                    weight_counter += item[1]
+                }
+            }
+        }
+
+        function main() {
+            fetch("./list.json")
+                .then(function (res) {
+                    if (res.ok) {
+                        res.json()
+                            .then((data) => {
+                                _main(data)
+                            }, (reason) => {
+                                console.err(reason)
+                            })
+                    } else {
+                        console.err()
+                    }
+                })
+        }
+
+
+        main()
+    </script>
+</body>
+
+</html>

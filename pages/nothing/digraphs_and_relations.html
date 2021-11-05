@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.css"
+        integrity="sha384-R4558gYOUz8mP9YWpZJjofhk+zx0AS11p36HnD2ZKj/6JR5z27gSSULCNHIRReVs" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.15.1/dist/katex.min.js"
+        integrity="sha384-z1fJDqw8ZApjGO3/unPWUPsIymfsJmyrDVWC8Tv/a1HeOtGmkwNd/7xUS0Xcnvsx"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.min.js"></script>
+    <style>
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            border: none;
+            outline: none;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #katex_render_result {
+            width: 600px;
+            height: 300px;
+            text-align: center;
+            font-size: 150px;
+            display: inline-block;
+            position: fixed;
+            top: calc(50% - 150px);
+            left: calc(50% - 300px);
+            user-select: none;
+            color: #000;
+        }
+
+        #bottom_left_bar {
+            height: 30px;
+            padding: 5px 10px;
+            display: flex;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+        }
+
+        #bottom_left_bar>div {
+            width: 20px;
+            height: 20px;
+            margin: 0 5px;
+            display: inline-block;
+            border-radius: 100%;
+            opacity: .5;
+            background: rgba(0, 0, 0);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="katex_render_result"></div>
+    <section id="bottom_left_bar">
+        <div id="reflexive_and_anti_reflexive_relation"></div>
+        <div id="symmetry_and_antisymmetry_relation"></div>
+        <div id="transitive_relation"></div>
+    </section>
+
+    <script>
+        let katex_render_result = document.getElementById("katex_render_result");
+        katex.render("\\varnothing", katex_render_result, {
+            throwOnError: false
+        });
+
+        const node_size = 64
+        const node_half_size = node_size / 2
+        const node_border_width = 3
+        const relation_arrow_angle = Math.PI / 3.14
+        const relation_arrow_length = 16
+        const relation_arrow_offset = 5
+
+        class Point2D {
+            constructor(x, y) {
+                this.x = x
+                this.y = y
+            }
+            /**
+             * 返回两点间的距离
+             * @param {Point2D} point2d
+             */
+            distance(point2d) {
+                return Math.sqrt((point2d.x - this.x) ** 2 + (point2d.y - this.y) ** 2)
+            }
+
+            /**
+             * 返回角度
+             * @param {Point2D} point2d
+             */
+            angle(point2d) {
+                return Math.atan2(point2d.x - this.x, point2d.y - this.y)
+            }
+        }
+
+        /**
+         * 从 `point2d` 映射到圆上的点
+         * @param {Point2D} point2d
+         * @param {Point2D} circle_point2d
+         * @param {number} radius
+         */
+        function point_map_in_round(point2d, circle_point2d, radius) {
+            let arctan = Math.atan2(point2d.x - circle_point2d.x, point2d.y - circle_point2d.y)
+            return new Point2D(circle_point2d.x + Math.sin(arctan) * radius, circle_point2d.y + Math.cos(arctan) * radius)
+        }
+
+        /**
+         * 判断 `point2d` 是否在正方形里
+         * @param {Point2D} point2d
+         * @param {Point2D} square_point2d
+         * @param {number} side_length
+         * @return {boolean}
+         */
+        function is_in_square(point2d, square_point2d, side_length) {
+            return point2d.x > square_point2d.x && point2d.x < square_point2d.x + side_length && point2d.y > square_point2d.y && point2d.y < square_point2d.y + side_length
+        }
+
+        let last_index = 0
+        // {Map<number, [Point2D, ColorH]>}
+        let node_list_map = new Map()
+        // {(node_index,tree_index)[]}
+        let relation_set = new Set()
+        // index of node
+        let select_mask = -1;
+        let focus_mask = -1;
+
+        let keep_no_delete = [];
+        let last_mouse_press_node_index = undefined;
+        let drag_start_node_point = undefined;
+
+        let last_mouse_press_point = new Point2D(0, 0);
+
+        let draw_temp_line = false
+        let temp_line_last_point = undefined
+
+        let this_relation_will_be_delete = ""
+
+        let manipulated = false
+
+        window.addEventListener("resize", (ev) => {
+            resizeCanvas(window.innerWidth, window.innerHeight);
+        })
+
+        function setup() {
+            createCanvas(window.innerWidth, window.innerHeight); // Size must be the first statement
+            frameRate(30);
+            colorMode(HSL, 360, 100, 100);
+        }
+
+        function doubleClicked() {
+            let e_mouse = new Point2D(mouseX, mouseY)
+            // 双击则删除元素
+            if (e_mouse.distance(last_mouse_press_point) < 40) {
+                for (const i of node_list_map.keys()) {
+                    let element = node_list_map.get(i)
+                    if (is_in_square(e_mouse, element[0], node_size)) {
+                        if (keep_no_delete.indexOf(i) < 0) {
+                            // 如果有 select_mask 就去掉
+                            if (select_mask == i) {
+                                select_mask = -1
+                            }
+
+                            for (const item of relation_set) {
+                                let element_list = [parseInt(item.slice(0, item.indexOf(","))), parseInt(item.slice(item.indexOf(",") + 1))]
+                                if (element_list[0] == i || element_list[1] == i) {
+                                    relation_set.delete(item)
+                                }
+                            }
+                            node_list_map.delete(i)
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
+        function mousePressed() {
+            last_mouse_press_point = new Point2D(mouseX, mouseY)
+            for (const i of node_list_map.keys()) {
+                let element = node_list_map.get(i)
+                if (is_in_square(last_mouse_press_point, element[0], node_size)) {
+                    last_mouse_press_node_index = i
+                    break
+                }
+            }
+        }
+
+        function mouseClicked() {
+            let e_mouse = new Point2D(mouseX, mouseY)
+            // 单击事件偏差太大则不处理
+            if (e_mouse.distance(last_mouse_press_point) < 40) {
+                let notInEach = true
+                node_list_map.forEach(element => {
+                    if (is_in_square(e_mouse, new Point2D(element[0].x - node_half_size, element[0].y - node_half_size), node_size * 2)) {
+                        notInEach = false
+                    }
+                });
+                // 添加 node
+                if (notInEach) {
+                    last_index += 1;
+                    let this_index = last_index;
+                    node_list_map.set(this_index, [new Point2D(mouseX - node_half_size, mouseY - node_half_size), parseInt(random(360))])
+                    keep_no_delete.push(this_index)
+                    setTimeout(() => {
+                        keep_no_delete.splice(keep_no_delete.indexOf(this_index), 1);
+                    }, 200)
+                    // 如果鼠标下面存在其他 node 则删除 select_mask
+                } else {
+                    // 添加 select_mask
+                    for (const i of node_list_map.keys()) {
+                        let element = node_list_map.get(i)
+                        if (is_in_square(e_mouse, element[0], node_size)) {
+                            if (select_mask == i) {
+                                select_mask = -1
+                            } else {
+                                select_mask = i
+                            }
+                            break
+                        }
+                    }
+                }
+            }
+        }
+
+        function mouseDragged() {
+            let e_mouse = new Point2D(mouseX, mouseY)
+            if (last_mouse_press_point.distance(e_mouse) > 40) {
+                if (last_mouse_press_node_index) {
+                    draw_temp_line = true
+                }
+            }
+
+            focus_mask = -1
+            if (e_mouse.distance(last_mouse_press_point) > 40) {
+                for (const i of node_list_map.keys()) {
+                    const element = node_list_map.get(i);
+                    if (is_in_square(e_mouse, element[0], node_size)) {
+                        focus_mask = i
+                    }
+                }
+            }
+
+            if (focus_mask > 0 && relation_set.has([last_mouse_press_node_index, focus_mask].toString())) {
+                this_relation_will_be_delete = [last_mouse_press_node_index, focus_mask].toString()
+            }
+        }
+
+        function mouseReleased() {
+            if (last_mouse_press_node_index) {
+                let e_mouse = new Point2D(mouseX, mouseY)
+                let drag_end_node_index;
+
+                for (const i of node_list_map.keys()) {
+                    const element = node_list_map.get(i);
+                    if (is_in_square(e_mouse, element[0], node_size)) {
+                        drag_end_node_index = i
+                    }
+                }
+                if (drag_end_node_index) {
+                    if (e_mouse.distance(last_mouse_press_point) > 40) {
+                        let new_relation = [last_mouse_press_node_index, drag_end_node_index].toString()
+                        if (relation_set.has(new_relation)) {
+                            relation_set.delete(new_relation)
+                        } else {
+                            relation_set.add(new_relation)
+                        }
+                    }
+                }
+            }
+            last_mouse_press_node_index = undefined
+            draw_temp_line = false
+            this_relation_will_be_delete = ""
+            focus_mask = -1
+        }
+
+        function draw() {
+            background(0, 0, 90)
+
+            fill(0, 0, 100)
+            textAlign(CENTER, CENTER);
+            textSize(node_size / 2.5);
+            //drawingContext.setLineDash([]);
+
+            // 渲染关系
+            push()
+            stroke(0, 0, 30, .5)
+            noFill()
+            strokeWeight(2)
+            relation_set.forEach(element => {
+                let element_list = [parseInt(element.slice(0, element.indexOf(","))), parseInt(element.slice(element.indexOf(",") + 1))]
+                let point_start = node_list_map.get(element_list[0])[0], point_end = node_list_map.get(element_list[1])[0]
+                point_start = new Point2D(point_start.x + node_half_size, point_start.y + node_half_size)
+                point_end = new Point2D(point_end.x + node_half_size, point_end.y + node_half_size)
+
+                if (element_list[0] != element_list[1]) {
+                    let angle = point_start.angle(point_end);
+
+                    point_start = new Point2D(point_start.x + + cos(PI - angle) * relation_arrow_offset, point_start.y + sin(PI - angle) * relation_arrow_offset)
+                    point_end = new Point2D(point_end.x + + cos(PI - angle) * relation_arrow_offset, point_end.y + sin(PI - angle) * relation_arrow_offset)
+                    let arrow_head_start = point_map_in_round(point_start, point_end, node_half_size + 1)
+
+                    if (this_relation_will_be_delete == element) {
+                        push()
+                        stroke(0, 70, 80)
+                        drawingContext.setLineDash([9, 10]);
+                    }
+                    line(point_start.x, point_start.y, point_end.x, point_end.y)
+                    line(
+                        arrow_head_start.x, arrow_head_start.y,
+                        arrow_head_start.x + cos(PI + angle - relation_arrow_angle) * relation_arrow_length, arrow_head_start.y - sin(PI + angle - relation_arrow_angle) * relation_arrow_length
+                    )
+                    if (this_relation_will_be_delete == element) {
+                        pop()
+                    }
+
+                } else {
+                    push()
+                    translate(point_start.x, point_start.y)
+                    if (this_relation_will_be_delete != element) {
+                        stroke(0, 0, 20, .3)
+                    } else {
+                        stroke(0, 70, 80)
+                    }
+                    circle(-node_half_size / 3, -node_half_size / 3, node_size / 1.2)
+                    pop()
+                }
+            });
+            pop()
+
+            // 渲染临时线
+            if (draw_temp_line) {
+                push()
+                stroke(0, 0, 50, 255)
+                strokeWeight(2)
+                let last_mouse_press_node_point = node_list_map.get(last_mouse_press_node_index)[0]
+                last_mouse_press_node_point = new Point2D(last_mouse_press_node_point.x + node_half_size, last_mouse_press_node_point.y + node_half_size)
+                line(last_mouse_press_node_point.x, last_mouse_press_node_point.y, mouseX, mouseY);
+                pop()
+            }
+
+            // 渲染节点
+            for (const key of node_list_map.keys()) {
+                const element = node_list_map.get(key);
+                push();
+
+                strokeWeight(node_border_width);
+                translate(element[0].x + node_half_size, element[0].y + node_half_size);
+                stroke(element[1], 70, 70);
+                circle(0, 0, node_size)
+
+                noStroke();
+                fill(element[1], 40, 30);
+                text(key, 0, 0);
+
+                pop()
+            }
+
+            // 渲染 select_mask
+            if (select_mask > -1 && node_list_map.get(select_mask) && select_mask != focus_mask) {
+                push()
+                drawingContext.setLineDash([10, 18]);
+                noFill()
+                strokeWeight(node_border_width)
+                stroke(25, 100, 100)
+                translate(node_list_map.get(select_mask)[0].x + node_half_size, node_list_map.get(select_mask)[0].y + node_half_size);
+                rotate(millis() / 500)
+                circle(0, 0, node_size)
+                pop()
+            }
+
+            if (focus_mask > -1) {
+                push()
+                drawingContext.setLineDash([10, 18])
+                noFill()
+                strokeWeight(1)
+                stroke(25, 100, 100)
+                translate(node_list_map.get(focus_mask)[0].x + node_half_size, node_list_map.get(focus_mask)[0].y + node_half_size);
+                rotate(millis() / 500)
+                circle(0, 0, node_size)
+                pop()
+            }
+        }
+
+
+        let last_relation_set_value = "";
+        setInterval(() => {
+            // 获取当前 relation_set_values 的字符串形式
+            let relation_set_values = []
+            for (const value of relation_set.values()) {
+                relation_set_values.push(value)
+            }
+            relation_set_values = relation_set_values.toString()
+
+            // 不相同则更新 last_relation_set_value 并重新进行渲染
+            if (relation_set_values != last_relation_set_value) {
+                last_relation_set_value = relation_set_values
+
+                let reflexive_relation = true,
+                    anti_reflexive_relation = true,
+                    symmetry_relation = true,
+                    antisymmetry_relation = true,
+                    transitive_relation = true
+
+
+                let relation_list = []
+                relation_set.forEach(element => {
+                    relation_list.push([parseInt(element.slice(0, element.indexOf(","))), parseInt(element.slice(element.indexOf(",") + 1))])
+                });
+
+                // 自反与反自反判断
+                let reflexive_relation_map = new Map()
+                relation_list.forEach(item => {
+                    if (item[0] == item[1]) {
+                        anti_reflexive_relation = false
+                        reflexive_relation_map.set(item[0], true)
+                    }
+                })
+                for (const key of node_list_map.keys()) {
+                    if (!reflexive_relation_map.has(key)) {
+                        reflexive_relation = false
+                        break
+                    }
+                }
+
+                // 对称与反对称判断
+                let symmetry_relation_list = []
+                relation_list.forEach(item => {
+                    if (item[0] != item[1]) {
+                        // 对称有序对的索引
+                        let reverse_order_pair_index = symmetry_relation_list.indexOf([item[1], item[0]].toString())
+                        if (reverse_order_pair_index < 0) {
+                            symmetry_relation_list.push([item[0], item[1]].toString())
+                        } else {
+                            symmetry_relation_list.splice(reverse_order_pair_index, 1)
+                            antisymmetry_relation = false
+                        }
+                    }
+                })
+                if (symmetry_relation_list.length > 0) {
+                    symmetry_relation = false
+                }
+
+                // 传递关系判断
+
+                // 笛卡尔积
+                let relation_cartesian_product = []
+                relation_list.forEach(left => {
+                    relation_list.forEach(right => {
+                        if (left[1] == right[0]) {
+                            relation_cartesian_product.push([left[0], right[1]])
+                        }
+                    })
+                })
+                for (const item of relation_cartesian_product) {
+                    if (!relation_set.has(item.toString())) {
+                        transitive_relation = false
+                        break
+                    }
+                }
+
+                // 自反、对称、对称关系渲染
+                if (reflexive_relation)
+                    document.getElementById("reflexive_and_anti_reflexive_relation").style.background = "#2c5"
+                else if (anti_reflexive_relation)
+                    document.getElementById("reflexive_and_anti_reflexive_relation").style.background = "#d46"
+                else
+                    document.getElementById("reflexive_and_anti_reflexive_relation").style.background = "#000"
+
+                if (symmetry_relation && antisymmetry_relation)
+                    document.getElementById("symmetry_and_antisymmetry_relation").style.background = "#27d"
+                else if (symmetry_relation)
+                    document.getElementById("symmetry_and_antisymmetry_relation").style.background = "#2c5"
+                else if (anti_reflexive_relation)
+                    document.getElementById("symmetry_and_antisymmetry_relation").style.background = "#d46"
+                else
+                    document.getElementById("symmetry_and_antisymmetry_relation").style.background = "#000"
+
+                if (transitive_relation) {
+                    document.getElementById("transitive_relation").style.background = "#2c5"
+                } else {
+                    document.getElementById("transitive_relation").style.background = "#000"
+                }
+
+
+                if (relation_set.size == 0) {
+                    katex.render("\\varnothing", katex_render_result, {
+                        throwOnError: false
+                    })
+                } else {
+                    let result = ""
+                    for (const i of relation_set.values()) {
+                        result += "<" + i + ">,"
+                    }
+                    result = result.substr(0, result.length - 1)
+                    katex.render("\\{" + result + "\\}", katex_render_result, {
+                        throwOnError: false
+                    })
+                    katex_render_result.style.fontSize = 150 / (1.3 * log(result.length)) + "px"
+                }
+                last_relation_set = new Set(relation_set)
+            }
+        }, 200)
+
+
+    </script>
+</body>
+
+</html>

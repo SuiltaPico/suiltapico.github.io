@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发生了错误</title>
+</head>
+
+<body>
+    网站程序在运行时发生了极其严重的错误导致紧急退出，<span id="from"></span>错误原因如下：
+    <div id="reason"></div>
+    <script>
+        //let query_from = getQueryString("from");
+        //document.getElementById("from").innerText = query_from ? "发生错误的网页：" + query_from + " " : ""
+        document.getElementById("reason").innerText = decodeURIComponent(location.hash.substr(1));
+    </script>
+</body>
+
+</html>
