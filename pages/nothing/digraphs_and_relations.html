@@ -234,6 +234,7 @@
 
         function mouseDragged() {
             let e_mouse = new Point2D(mouseX, mouseY)
+            console.log(last_mouse_press_point);
             if (last_mouse_press_point.distance(e_mouse) > 40) {
                 if (last_mouse_press_node_index) {
                     draw_temp_line = true
@@ -283,19 +284,7 @@
             focus_mask = -1
         }
 
-        function touchStarted() {
-            touched = true
-        }
-
-        function touchMoved() {
-            if (touched) {
-                mouseDragged()
-            }
-        }
-
-        function touchEnded() {
-            touched = false
-        }
+        
 
         function draw() {
             background(0, 0, 90)
