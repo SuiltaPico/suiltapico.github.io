@@ -21,7 +21,6 @@
             outline: none;
             margin: 0;
             padding: 0;
-            overflow: hidden;
         }
 
         #katex_render_result {
@@ -153,7 +152,6 @@
 
         let manipulated = false
 
-        let touched = false
 
         window.addEventListener("resize", (ev) => {
             resizeCanvas(window.innerWidth, window.innerHeight);
@@ -293,6 +291,8 @@
         }
 
         function touchStarted() {
+            let fs = fullscreen();
+            fullscreen(!fs);
             mousePressed()
         }
         function touchEnded() {
@@ -522,7 +522,7 @@
                         throwOnError: false
                     })
                     let is_mini_screen = window.matchMedia("screen and (min-width: 700px)")
-                    if(is_mini_screen.matches){
+                    if (is_mini_screen.matches) {
                         katex_render_result.style.fontSize = 75 / (1.3 * log(result.length)) + "px"
                     } else {
                         katex_render_result.style.fontSize = 150 / (1.3 * log(result.length)) + "px"
