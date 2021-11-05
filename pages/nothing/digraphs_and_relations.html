@@ -161,6 +161,7 @@
             createCanvas(window.innerWidth, window.innerHeight); // Size must be the first statement
             frameRate(30);
             colorMode(HSL, 360, 100, 100);
+            dispatchEvent("resize")
         }
 
         function doubleClicked() {
