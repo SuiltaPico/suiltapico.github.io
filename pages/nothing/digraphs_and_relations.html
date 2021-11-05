@@ -145,6 +145,8 @@
 
         let manipulated = false
 
+        let touched = false
+
         window.addEventListener("resize", (ev) => {
             resizeCanvas(window.innerWidth, window.innerHeight);
         })
@@ -279,6 +281,20 @@
             draw_temp_line = false
             this_relation_will_be_delete = ""
             focus_mask = -1
+        }
+
+        function touchStarted() {
+            touched = true
+        }
+
+        function touchMoved() {
+            if (touched) {
+                mouseDragged()
+            }
+        }
+
+        function touchEnded() {
+            touched = false
         }
 
         function draw() {
