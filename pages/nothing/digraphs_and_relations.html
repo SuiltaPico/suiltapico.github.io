@@ -284,7 +284,12 @@
             focus_mask = -1
         }
 
-        
+        function touchStarted() {
+            mousePressed()
+        }
+        function touchEnded() {
+            mouseReleased()
+        }
 
         function draw() {
             background(0, 0, 90)
