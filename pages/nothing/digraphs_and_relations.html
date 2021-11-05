@@ -14,13 +14,15 @@
     <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.min.js"></script>
     <style>
         html,
-        body {
+        body,
+        main {
             width: 100%;
             height: 100%;
             border: none;
             outline: none;
             margin: 0;
             padding: 0;
+            overflow: hidden;
         }
 
         #katex_render_result {
@@ -55,7 +57,29 @@
             background: rgba(0, 0, 0);
         }
 
-        @media screen and (min-height: 700px) {
+        #bottom_left_bar>div:hover::before {
+            position: absolute;
+            bottom: 50px;
+            background-color: #000;
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            width: max-content;
+        }
+
+        #reflexive_and_anti_reflexive_relation:hover::before {
+            content: "自反与反自反";
+        }
+
+        #symmetry_and_antisymmetry_relation:hover::before {
+            content: "对称与反对称";
+        }
+
+        #transitive_relation:hover::before {
+            content: "传递";
+        }
+
+        @media screen and (max-width: 700px) {
             #katex_render_result {
                 width: 300px;
                 font-size: 75px;
@@ -154,14 +178,17 @@
 
 
         window.addEventListener("resize", (ev) => {
-            resizeCanvas(window.innerWidth, window.innerHeight);
+            resizeCanvas(document.body.clientWidth, document.body.clientHeight);
         })
 
         function setup() {
-            createCanvas(window.innerWidth, window.innerHeight); // Size must be the first statement
+            createCanvas(document.body.clientWidth, document.body.clientHeight);
+            document.getElementById("defaultCanvas0").style.width = document.body.clientWidth + "px"
+            document.getElementById("defaultCanvas0").style.height = document.body.clientHeight + "px"
+            document.getElementById("defaultCanvas0").setAttribute("width", document.body.clientWidth)
+            document.getElementById("defaultCanvas0").setAttribute("height", document.body.clientHeight)
             frameRate(30);
             colorMode(HSL, 360, 100, 100);
-            dispatchEvent("resize")
         }
 
         function doubleClicked() {
@@ -496,7 +523,7 @@
                     document.getElementById("symmetry_and_antisymmetry_relation").style.background = "#27d"
                 else if (symmetry_relation)
                     document.getElementById("symmetry_and_antisymmetry_relation").style.background = "#2c5"
-                else if (anti_reflexive_relation)
+                else if (antisymmetry_relation)
                     document.getElementById("symmetry_and_antisymmetry_relation").style.background = "#d46"
                 else
                     document.getElementById("symmetry_and_antisymmetry_relation").style.background = "#000"
@@ -505,6 +532,14 @@
                     document.getElementById("transitive_relation").style.background = "#2c5"
                 } else {
                     document.getElementById("transitive_relation").style.background = "#000"
+                }
+
+                if (reflexive_relation && symmetry_relation && transitive_relation) {
+                    katex_render_result.style.color = "#27d";
+                } else if (reflexive_relation && antisymmetry_relation && transitive_relation) {
+                    katex_render_result.style.color = "#d46";
+                } else {
+                    katex_render_result.style.color = "#000";
                 }
 
 
@@ -521,7 +556,7 @@
                     katex.render("\\{" + result + "\\}", katex_render_result, {
                         throwOnError: false
                     })
-                    let is_mini_screen = window.matchMedia("screen and (min-width: 700px)")
+                    let is_mini_screen = window.matchMedia("screen and (max-width: 700px)")
                     if (is_mini_screen.matches) {
                         katex_render_result.style.fontSize = 75 / (1.3 * log(result.length)) + "px"
                     } else {
