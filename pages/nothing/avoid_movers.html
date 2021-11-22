@@ -53,7 +53,7 @@
                 if (!slow_animation_frame) {
                     noStroke();
                 } else {
-                    stroke(0, 0, map(slow_animation_frame,0,60,0,100));
+                    stroke(0, 0, map(slow_animation_frame, 0, 60, 0, 100));
                 }
                 fill(hue, 70, 90, .6);
                 ellipse(this.position.x, this.position.y, this.mass * 24, this.mass * 24);
@@ -199,7 +199,7 @@
                 noStroke();
                 translate(mouseX, mouseY);
                 ellipse(0, 0, 10, 10);
-                rotate(frameCount / (15 - (explosion_animation_frame / 20) - (slow_animation_frame)/20) * PI);
+                rotate(frameCount / (15 - (explosion_animation_frame / 20) - (slow_animation_frame) / 20) * PI);
                 let fakeTimeDotBall = floor(explosion_animation_frame / 2) + floor(slow_animation_frame / 30)
                 let timeDotBallNum = floor(timeDotCount / 10);
                 let timeDotBallDistance = TWO_PI / (timeDotBallNum + fakeTimeDotBall);
@@ -216,7 +216,7 @@
                 push();
                 noStroke();
                 textSize(30);
-                fill(0, map(max(slow_animation_frame,explosion_animation_frame),0,60,0,100), 100);
+                fill(0, map(max(slow_animation_frame, explosion_animation_frame), 0, 60, 0, 100), 100);
                 text("score: " + round(score), 0, 30);
                 fill(0, 0, 100);
                 text("max score: " + round(maxScore), 0, 70);
@@ -272,6 +272,20 @@
                         tds = [];
                     }
                 }
+            }
+        }
+
+        function doubleClicked() {
+            if (timeDotCount >= 30) {
+                timeDotCount -= 30;
+                explosion_animation_frame = 60;
+                for (let mover of movers) {
+                    mover.velocity.mult(
+                        -3
+                    );
+                }
+                score *= .5;
+                tds = [];
             }
         }
 
