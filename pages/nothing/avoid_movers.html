@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avoid Movers</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.4.0/lib/p5.min.js"></script>
+    <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <script>
+        let limit = 500;
+
+        class Mover {
+
+            constructor(m, x, y) {
+                this.mass = m;
+                this.position = new p5.Vector(x, y);
+                this.velocity = new p5.Vector(0, 0);
+                this.acceleration = new p5.Vector(0, 0);
+            }
+
+            applyForce(force) {
+                let f = p5.Vector.div(force, this.mass);
+                this.acceleration.add(f);
+            }
+
+            update() {
+                this.velocity.add(this.acceleration);
+                if (this.position.x < -  limit || this.position.x > width + limit) {
+                    this.velocity.x *= -1;
+                }
+                if (this.position.y < -  limit || this.position.y > height + limit) {
+                    this.velocity.y *= -1;
+                }
+                this.position.add(this.velocity);
+                this.acceleration.mult(0);
+            }
+
+            display(hue) {
+                push()
+                if (!slow_animation_frame) {
+                    noStroke();
+                } else {
+                    stroke(0, 0, map(slow_animation_frame,0,60,0,100));
+                }
+                fill(hue, 70, 90, .6);
+                ellipse(this.position.x, this.position.y, this.mass * 24, this.mass * 24);
+                pop()
+            }
+
+        }
+
+        class TimeDot {
+            constructor(value, x, y) {
+                this.value = value;
+                this.position = new p5.Vector(x, y);
+            }
+
+            draw() {
+                push();
+                stroke(map(this.value, 0, 6, 40, 255));
+                strokeWeight(2);
+                fill(frameCount % 256, 70, 90, map(this.value, 0, 6, 50, 100));
+                rect(this.position.x, this.position.y, 16, 16);
+                pop();
+            }
+        }
+
+        // The Nature of Code
+        // Daniel Shiffman
+        // http://natureofcode.com
+
+        let movers = [];
+        let tds = [];
+
+        let g = 0;
+        let dead = false;
+        let deadDelay = false;
+        const initNum = 3;
+        const movers_num_limit = 1000;
+        let score = 0;
+        let maxScore = parseInt(localStorage.getItem("maxScore") ? localStorage.getItem("maxScore") : 0);
+
+        const padding = 10;
+        const timeDotBarSize = 40;
+        let timeDotCount = 30;
+
+        let pause = false
+
+        let explosion_animation_frame = 0;
+        let slow_animation_frame = 0;
+
+        function setup() {
+            createCanvas(windowWidth, windowHeight, P2D);
+            //fullscreen(0);
+            for (let i = 0; i < initNum; i++) {
+                movers.push(new Mover(random(.4, 3), random(width), random(height)));
+            }
+            colorMode(HSB, 255, 100, 100);
+            blendMode(ADD);
+        }
+
+        function draw() {
+            pause = !fullscreen();
+            if (dead) {
+                dead = false;
+                explosion_animation_frame = 0;
+                push();
+                blendMode(BLEND);
+                score = 0;
+                timeDotCount = 30;
+                let mouse = new p5.Vector(mouseX, mouseY);
+                for (let mover of movers) {
+                    mover.velocity.mult(
+                        -map(p5.Vector.sub(mouse, mover.position).mag(), 1, (width + limit * 2) * 1.4, 0, 1)
+                    );
+                }
+                fill(128, .5);
+                rect(0, 0, width, height);
+                fill(0, 100, 100);
+                textSize(64);
+                text(" You're dead", width / 2 - 32 * 6, height / 2); pop(); deadDelay = true;
+                setTimeout(() => {
+                    deadDelay = false;
+                }, 500)
+            } else if (deadDelay) {
+
+            } else if (pause) {
+                blendMode(BLEND);
+                fill(0, 100, 100);
+                textSize(64);
+                text("Touch to continue.", width / 2 - 32 * 8, height / 2);
+            } else {
+                explosion_animation_frame > 0 ? explosion_animation_frame-- : 0
+                slow_animation_frame > 0 ? slow_animation_frame-- : 0
+
+                if (frameCount % 30 == 0 && movers.length <= movers_num_limit) {
+                    movers.push(new Mover(random(.4, 3), random(0, 2) > 1 ? random(-limit, 0) : random(width, width + limit),
+                        random(0, 2) > 1 ? random(-limit, 0) : random(height, height + limit)
+                    ));
+                }
+
+                if (frameCount % 180 == 0) {
+                    tds.push(new TimeDot(
+                        round(random(1, 6)),
+                        random(0, width),
+                        random(0, height)
+                    ));
+                }
+
+                score += .1 + (frameCount) / 600;
+
+                if (score > maxScore) {
+                    maxScore = score;
+                    localStorage.setItem("maxScore", maxScore)
+                }
+                blendMode(BLEND);
+                background(0);
+                blendMode(ADD);
+
+                for (let i = 0; i < movers.length; i++) {
+                    let mover = movers[i];
+                    let distance = p5.Vector.sub(new p5.Vector(mouseX, mouseY), mover.position);
+                    if (distance.mag() < mover.mass * 12 + 8) {
+                        dead = true;
+                    }
+                    mover.applyForce(distance.copy().normalize().mult(mover.mass * (30 + log(score * 4) * 5) / pow(constrain(distance.mag(), 1, 120), 2)));
+                    mover.update();
+                    mover.display(i % 255);
+                }
+
+                for (let i = 0; i < tds.length; i++) {
+                    let td = tds[i];
+                    let distance = p5.Vector.sub(new p5.Vector(mouseX, mouseY), td.position);
+                    if (distance.mag() < 18) {
+                        tds.splice(i, 1);
+                        i--;
+                        timeDotCount += td.value;
+                        score *= 1.2;
+                    }
+                    td.draw();
+                }
+
+                // main ball and float ball
+                push();
+                fill(0, 70, 100);
+                noStroke();
+                translate(mouseX, mouseY);
+                ellipse(0, 0, 10, 10);
+                rotate(frameCount / (15 - (explosion_animation_frame / 20) - (slow_animation_frame)/20) * PI);
+                let fakeTimeDotBall = floor(explosion_animation_frame / 2) + floor(slow_animation_frame / 30)
+                let timeDotBallNum = floor(timeDotCount / 10);
+                let timeDotBallDistance = TWO_PI / (timeDotBallNum + fakeTimeDotBall);
+                for (let i = 0; i < timeDotBallNum + fakeTimeDotBall; i++) {
+                    fill(map(i, 0, timeDotBallNum + fakeTimeDotBall, 0, 255), 60 - explosion_animation_frame, 100, 1);
+                    ellipse(
+                        cos(i * timeDotBallDistance) * (16 + explosion_animation_frame / 2),
+                        sin(i * timeDotBallDistance) * (16 + explosion_animation_frame / 2),
+                        5, 5
+                    );
+                }
+                pop();
+
+                push();
+                noStroke();
+                textSize(30);
+                fill(0, map(max(slow_animation_frame,explosion_animation_frame),0,60,0,100), 100);
+                text("score: " + round(score), 0, 30);
+                fill(0, 0, 100);
+                text("max score: " + round(maxScore), 0, 70);
+                pop();
+
+                push();
+                translate(width - timeDotBarSize - padding, padding);
+                stroke(0, 0, 100);
+                noFill();
+                rect(0, 0, timeDotBarSize, timeDotBarSize);
+                noStroke();
+                fill(180, 70, 100);
+                let timeDotBarHeight = float(timeDotCount % 10) / 10 * timeDotBarSize;
+                rect(0, timeDotBarSize * 1 - timeDotBarHeight, timeDotBarSize, timeDotBarHeight);
+                textSize(30);
+                fill(255);
+                text("" + floor(timeDotCount / 10), timeDotBarSize / 2 - 7.5, timeDotBarSize / 2 + 7.5);
+                pop();
+            }
+        }
+
+        function mousePressed(e) {
+            if (pause) {
+                fullscreen(true);
+                resizeCanvas(windowWidth, document.body.clientHeight)
+                setTimeout(() => {
+                    resizeCanvas(windowWidth, document.body.clientHeight);
+                }, 500
+                )
+            }
+            else {
+                if (timeDotCount >= 10) {
+                    let mouse = new p5.Vector(mouseX, mouseY);
+                    if (mouseButton == LEFT) {
+                        timeDotCount -= 10;
+                        slow_animation_frame = 60
+                        for (let mover of movers) {
+                            mover.velocity.mult(
+                                map(p5.Vector.sub(mouse, mover.position).mag(), 1, (width + limit * 2) * 1.4, 0, 1)
+                            );
+                        }
+                        score *= .8;
+                        tds = [];
+                    } else if (mouseButton == RIGHT && timeDotCount >= 30) {
+                        timeDotCount -= 30;
+                        explosion_animation_frame = 60;
+                        for (let mover of movers) {
+                            mover.velocity.mult(
+                                -3
+                            );
+                        }
+                        score *= .5;
+                        tds = [];
+                    }
+                }
+            }
+        }
+
+        window.addEventListener("resize", () => {
+            resizeCanvas(windowWidth, document.body.clientHeight)
+        })
+
+        window.addEventListener("contextmenu", (e) => {
+            e.preventDefault()
+        })
+    </script>
+</body>
+
+</html>

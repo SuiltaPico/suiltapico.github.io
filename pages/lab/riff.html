@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <script src="https://unpkg.com/vue@next"></script>
+    <script src="/js/pages/lab/riff.js"></script>
+</head>
+
+<body>
+    <div id="app">
+        <main>
+            <section id="file">
+                <p>
+                    <label for="input_file">选择 Riff 文件：</label>
+                    <input type="file" name="input_file" id="input_file" accept="audio/wav, video/avi, *"
+                        v-on:change="loadfile" ref="input_file">
+                </p>
+
+                <p>
+                    <progress ref="read_progress" :max="fileSize" :value="fileReadSize" v-if="readProgressShow"></progress>
+                </p>
+            </section>
+            <section id="analytical_results" v-show="analyticalResultsShow">
+                <h3>文件信息</h3>
+                <p>最后一次修改时间： {{ lastModified }}</p>
+
+                <h3>头信息</h3>
+                <p>RIFF头：{{ RIFFHeader }}</p>
+                <p>块数据大小： {{ chunkSize }} byte</p>
+                <p>类型： {{ formType }}</p>
+
+                <h3>fmt 子块</h3>
+                <p>"fmt "：{{ fmtHeader }}</p>
+            </section>
+        </main>
+    </div>
+</body>
+
+</html>

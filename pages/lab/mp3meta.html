@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MP3 Meta</title>
+    <script src="https://unpkg.com/vue@next"></script>
+    <style>
+        /* inconspicuous */
+        .inc {
+            color: #888;
+        }
+    </style>
+</head>
+
+<body>
+    <main id="app">
+        <section id="file_selection">
+            <p>
+                <label for="file_selector">选择 Mp3 文件：</label>
+                <input type="file" id="file_selector" accept="audio/mp3,*" v-on:change="load_file" ref="file_selector">
+            </p>
+        </section>
+
+        <section id="state">
+            <div>状态：{{ state.state }}</div>
+            <div>日志：{{ state.log }}</div>
+            <progress :max="state.progress.max" :value="state.progress.value"
+                v-show="state.progress.visability"></progress>
+        </section>
+
+        <section id="console">
+
+        </section>
+
+        <section ref="ID3v1" v-show="ID3v1.visability">
+            <h2>ID3v1</h2>
+            <p><label for="ID3v1_song_title">歌曲名称：</label> <input type="text" id="ID3v1_song_title"
+                    v-model="ID3v1.song_title"></p>
+            <p><label for="ID3v1_artist">艺术家：</label> <input type="text" id="ID3v1_artist" v-model="ID3v1.artist"></p>
+            <p><label for="ID3v1_album">专辑：</label> <input type="text" id="ID3v1_album" v-model="ID3v1.album"></p>
+            <p><label for="ID3v1_year">年份：</label> <input type="number" id="ID3v1_year" v-model="ID3v1.year"></p>
+            <p><label for="ID3v1_comment">注释：</label> <input type="text" id="ID3v1_comment" v-model="ID3v1.comment"></p>
+            <p>
+                <label for="ID3v1_genre">类型：</label>
+                <input type="number" id="ID3v1_genre" v-model="ID3v1.genre"> &nbsp;
+                <span class="inc">解释：{{ ID3v1_genre_describe }}</span>
+            </p>
+        </section>
+
+        <section ref="ID3v2" v-show="ID3v2.visability">
+            <h2>ID3v2</h2>
+            <section ref="ID3v2_header">
+                <p>
+                    <label for="ID3v2_version">ID3版本：</label>
+                    <span> {{ ID3v2.major_version + "." + ID3v2.sub_version }} </span>
+                </p>
+                <p>
+                    <label for="ID3v2_unsynchronisation">帧不同步：</label>
+                    <select id="ID3v2_unsynchronisation" v-model="ID3v2.unsynchronisation">
+                        <option value="true">真</option>
+                        <option value="false">假</option>
+                    </select>
+                <div class="inc">不同步应用于所有帧</div>
+                </p>
+                <p>
+                    <label for="ID3v2_extended_header">扩展头部：</label>
+                    <select id="ID3v2_extended_header" v-model="ID3v2.extended_header">
+                        <option value="true">真</option>
+                        <option value="false">假</option>
+                    </select>
+                <div class="inc">表示头是否为后跟一个扩展头</div>
+                </p>
+                <p>
+                    <label for="ID3v2_experimental_indicator">标签实验指示：</label>
+                    <select id="ID3v2_experimental_indicator" v-model="ID3v2.experimental_indicator">
+                        <option value="true">真</option>
+                        <option value="false">假</option>
+                    </select>
+                <div class="inc">当标签处于实验阶段时为真</div>
+                </p>
+                <p>
+                    <label for="ID3v2_footer_present">页脚存在：</label>
+                    <select id="ID3v2_footer_present" v-model="ID3v2.footer_present">
+                        <option value="true">真</option>
+                        <option value="false">假</option>
+                    </select>
+                </p>
+                <p>
+                    <label for="ID3v2_size">标签大小：</label>
+                    <span>{{ Number(ID3v2.size / 1024 / 1024).toFixed(2) }}</span> MB
+                </p>
+            </section>
+            <section v-show="ID3v2.extended_header == `true`">
+                <h3>扩展头（暂不支持）</h3>
+                <p>
+                    扩展头大小： {{ ID3v2.extended_header_.size }}
+                </p>
+                <p>
+                    扩展头标志字节数： {{ ID3v2.extended_header_.number_of_flag_bytes }}
+                </p>
+            </section>
+            <section ref="ID3v2_frames">
+                <h3>帧</h3>
+            </section>
+        </section>
+    </main>
+
+    <script>
+        /**
+         * @param {DataView} data_view
+         * @param {number} byte_offset
+         * @param {number} byte_length
+         * @param {string[]} filter
+         * @return {string}
+         */
+        function DataView_getUTF8String(data_view, byte_offset, byte_length, filter0 = false) {
+            let result = []
+            let char_count_number = 0
+            let char_byte_length = 0
+
+            // 把每个UTF8的字符codepoint推入 result
+            // 对每个 uint8 进行判断
+            for (let i = byte_offset; i < byte_offset + byte_length; i++) {
+                // 当前的 uint8
+                let char = data_view.getUint8(i)
+                // 如果还没有获取到 char_byte_length
+                if (char_byte_length == 0) {
+                    let char_byte_length_index = 1;
+                    // 从左边开始判断 0 在 哪一位
+                    for (let c = 0b1; char >> (8 - char_byte_length_index) == c; char_byte_length_index++) {
+                        // 0x...1 -> 0x...11
+                        c <<= 1
+                        c += 1
+                    }
+                    // 赋予 char_byte_length 0 的位置
+                    char_byte_length = char_byte_length_index
+
+                    // fileter0 ==0
+                    // 0 0 1
+                    // 1 0 1
+                    // 0 1 1
+                    // 1 1 0
+
+                    char_count_number << 8 - char_byte_length
+                    char_count_number += (((char << char_byte_length) & 0b1111_1111) >> char_byte_length)
+
+                    char_byte_length -= 1
+
+                } else {
+                    char_count_number << 6
+                    char_count_number += ((char << 2) & 0b1111_1111) >> 2
+                    char_byte_length -= 1
+                }
+
+                if (char_byte_length == 0) {
+                    if (!(filter0 && char == 0)) {
+                        result.push(char_count_number)
+                    }
+                    char_count_number = 0
+                }
+
+            }
+
+            return (() => {
+                let _result = String.fromCodePoint(...result);
+                return _result ? _result : ""
+            })()
+        }
+
+        /**
+         * @param {string} id
+         * @param {number} size
+         * @param {DataView} flags_view
+         * @param {DataView} frame_view
+         * @return number
+         */
+        function ID3v2_add_frame(id, size, flags_view, frame_view) {
+
+        }
+
+        // 信息来自 https://www.cnblogs.com/ranson7zop/p/7655474.html
+
+        const genre_describe_map = {
+            0: "Blues（布鲁斯）",
+            1: "Classic Rock（古典摇滚）",
+            2: "Country（乡村）",
+            3: "Dance（舞曲）",
+            4: "Disco（迪斯科）",
+            5: "Funk（放克）",
+            6: "Grunge（垃圾摇滚）",
+            7: "Hip-Hop（嘻哈）",
+            8: "Jazz（爵士）",
+            9: "Metal（金属）",
+            10: "New Age（新世纪）",
+            11: "Oldies",
+            12: "Other（其他）",
+            13: "Pop（流行）",
+            14: "R&B（节奏布鲁斯）",
+            15: "Rap（说唱）",
+            16: "Reggae（雷盖）",
+            17: "Rock（摇滚）",
+            18: "Techno（科技）",
+            19: "Industrial（工业）",
+            20: "Alternative（另类）",
+            21: "Ska",
+            22: "Death Metal（死亡金属）",
+            23: "Pranks",
+            24: "Soundtrack（原声音乐）",
+            25: "Euro-Techno（欧陆技术）",
+            26: "Ambient（氛围）",
+            27: "Trip-Hop（神游舞曲）",
+            28: "Vocal（人声）",
+            29: "Jazz+Funk（爵士+放克）",
+            30: "Fusion（混合）",
+            31: "Trance（恍惚）",
+            32: "Classical（古典）",
+            33: "Instrumental（器乐）",
+            34: "Acid（酸性）",
+            35: "House（浩室）",
+            36: "Game（游戏）",
+            37: "Sound Clip（声音片段）",
+            38: "Gospel（福音）",
+            39: "Noise（噪音）",
+            40: "AlternRock（另类摇滚）",
+            41: "Bass（贝斯）",
+            42: "Soul（灵魂）"
+            , 43: "Punk（朋克）"
+            , 44: "Space（太空）"
+            , 45: "Meditative（冥想）"
+            , 46: "Instrumental Pop（器乐流行）"
+            , 47: "Instrumental Rock（器乐摇滚）"
+            , 48: "Ethnic（民族）"
+            , 49: "Gothic（哥特）"
+            , 50: "Darkwave（暗潮）"
+            , 51: "Techno-Industrial（科技工业）"
+            , 52: "Electronic（电子）"
+            , 53: "Pop-Folk"
+            , 54: "EuroDance（欧陆舞曲）"
+            , 55: "Dream（梦幻）"
+            , 56: "Southern Rock（南方摇滚）"
+            , 57: "Comedy（喜剧）"
+            , 58: "Cult（邪教）"
+            , 59: "Gangsta（匪帮）"
+            , 60: "Top 40（头40）"
+            , 61: "Christian Rap（基督说唱）"
+            , 62: "Pop/Funk（流行/放克）"
+            , 63: "Jungle（丛林）"
+            , 64: "Native American（美洲土著）"
+            , 65: "Cabaret（卡巴莱）"
+            , 66: "New Wave（新浪潮）"
+            , 67: "Psychadelic（迷幻）"
+            , 68: "Rave（锐舞）"
+            , 69: "Showtunes（表演曲调）"
+            , 70: "Trailer（预告片音乐）"
+            , 71: "Lo-Fi（低保真）"
+            , 72: "Tribal（部落）"
+            , 73: "Acid Punk（酸朋克）"
+            , 74: "Acid Jazz（酸爵士）"
+            , 75: "Polka（波尔卡）"
+            , 76: "Retro（复古）"
+            , 77: "Musical（音乐的）"
+            , 78: "Rock & Roll（摇滚乐）"
+            , 79: "Hard Rock（硬摇滚乐）"
+            , 80: "Folk（民俗）"
+        }
+
+        const _App = {
+            data() {
+                return {
+                    state: {
+                        state: "无",
+                        log: "",
+                        progress: {
+                            visability: false,
+                            max: 1,
+                            value: 0
+                        }
+                    },
+                    ID3v1: {
+                        visability: false,
+                        song_title: "",
+                        artist: "",
+                        album: "",
+                        year: 0,
+                        comment: "",
+                        genre: 255,
+                        genre_describe: ""
+                    },
+                    ID3v2: {
+                        visability: false,
+                        major_version: 0,
+                        sub_version: 0,
+                        unsynchronisation: false,
+                        extended_header: false,
+                        experimental_indicator: false,
+                        footer_present: false,
+                        size: 0,
+                        extended_header_: {
+                            size: 0
+                        },
+                        frames: []
+                    }
+                }
+            },
+            methods: {
+                load_file() {
+                    let appthis = this
+                    let file_reader = new FileReader()
+                    /**
+                     * @type File
+                     */
+                    let file = this.$refs.file_selector.files[0]
+                    appthis.state.progress.max = 100
+
+                    file_reader.onprogress = function (evt) {
+                        appthis.state.progress.value = (evt.loaded / file.size) * 50
+                    }
+
+                    file_reader.onload = function (evt) {
+                        let file_buffer = evt.target.result
+                        let total_size = 0
+
+                        appthis.state.progress.value = 50
+                        appthis.state.state = "加载ID3v1信息"
+
+                        const ID3v1_size = 128
+                        let ID3v1_view = new DataView(file_buffer, file.size - ID3v1_size, ID3v1_size)
+                        if (ID3v1_view.getInt32(0, false) >> 8 == 0x544147) {
+                            appthis.ID3v1.song_title = DataView_getUTF8String(ID3v1_view, 3, 30, true)
+                            appthis.ID3v1.artist = DataView_getUTF8String(ID3v1_view, 33, 30, true)
+                            appthis.ID3v1.album = DataView_getUTF8String(ID3v1_view, 63, 30, true)
+                            appthis.ID3v1.year = DataView_getUTF8String(ID3v1_view, 93, 4, true)
+                            appthis.ID3v1.comment = DataView_getUTF8String(ID3v1_view, 97, 30, true)
+                            appthis.ID3v1.genre = ID3v1_view.getUint8(127)
+                            appthis.ID3v1.visability = true
+                        } else {
+                            appthis.state.log += `[信息] ID3v1信息读取失败，在 ${file.size - ID3v1_size} 没有匹配到 "TAG" \n`
+                            appthis.ID3v1.visability = false
+                        }
+
+                        appthis.state.progress.value += 25
+                        appthis.state.state = "加载ID3v2信息"
+
+                        let offset = 0
+                        const ID3v2_header_size = 10
+                        let ID3v2_header_view = new DataView(file_buffer, offset, ID3v2_header_size)
+                        if (ID3v2_header_view.getInt32(0, false) >> 8 == 0x494433) {
+                            appthis.ID3v2.major_version = ID3v2_header_view.getUint8(3)
+                            appthis.ID3v2.sub_version = ID3v2_header_view.getUint8(4)
+                            appthis.ID3v2.unsynchronisation = (ID3v2_header_view.getUint8(5) & 0b1000_0000) > 0
+                            appthis.ID3v2.extended_header = (ID3v2_header_view.getUint8(5) & 0b0100_0000) > 0
+                            appthis.ID3v2.experimental_indicator = (ID3v2_header_view.getUint8(5) & 0b0010_0000) > 0
+                            appthis.ID3v2.footer_present = (ID3v2_header_view.getUint8(5) & 0b0001_0000) > 0
+                            appthis.ID3v2.size =
+                                (ID3v2_header_view.getUint8(6) << 21)
+                                + (ID3v2_header_view.getUint8(7) << 14)
+                                + (ID3v2_header_view.getUint8(8) << 7)
+                                + ID3v2_header_view.getUint8(9)
+
+                            total_size = appthis.ID3v2.size + 10
+
+                            offset += 10
+
+                            let ID3v2_extended_header_view = new DataView(file_buffer, offset, 6)
+                            if (appthis.ID3v2.extended_header) {
+                                appthis.ID3v2.extended_header_.size = (ID3v2_header_view.getUint8(0) << 21)
+                                    + (ID3v2_header_view.getUint8(1) << 14)
+                                    + (ID3v2_header_view.getUint8(2) << 7)
+                                    + ID3v2_header_view.getUint8(3)
+
+                                offset += appthis.ID3v2.extended_header_.size
+
+                                appthis.ID3v2.extended_header_.number_of_flag_bytes = ID3v2_extended_header_view.getInt16(4)
+                            }
+
+                            // padding
+                            for (let ID3v2_padding_view = new DataView(file_buffer, offset, 2); ID3v2_padding_view.getUint16(0) == 0; offset++) { }
+
+                            // footer
+                            if (appthis.ID3v2.footer_present) {
+                                offset += 10
+                                total_size += 10
+                            }
+
+                            for (; offset < total_size;) {
+                                let ID3v2_frame_header_view = new DataView(file_buffer, offset, 10)
+                                let ID3v2_frame_ID = DataView_getUTF8String(ID3v2_frame_header_view, 0, 4, true)
+                                let ID3v2_frame_size = (ID3v2_header_view.getUint8(4) << 21)
+                                    + (ID3v2_header_view.getUint8(5) << 14)
+                                    + (ID3v2_header_view.getUint8(6) << 7)
+                                    + ID3v2_header_view.getUint8(7)
+                                let ID3v2_frame_flags_view = new DataView(file_buffer, offset + 8, 2)
+                                let ID3v2_frame_view = new DataView(file_buffer, offset + 10, ID3v2_frame_size)
+                                ID3v2_add_frame(ID3v2_frame_ID, ID3v2_frame_size, ID3v2_frame_flags_view, ID3v2_frame_view)
+                                offset += ID3v2_frame_size + 10
+                            }
+
+                            appthis.ID3v2.visability = true
+                        } else {
+                            appthis.state.log += `[信息] ID3v2信息读取失败，在 ${0} 没有匹配到 "ID3" \n`
+                            appthis.ID3v2.visability = false
+                        }
+
+                    }
+
+                    this.state.progress.visability = true
+                    this.state.state = "加载文件"
+                    file_reader.readAsArrayBuffer(file)
+                }
+            },
+            computed: {
+                ID3v1_genre_describe() {
+                    return Object.hasOwn(genre_describe_map, this.ID3v1.genre) ? genre_describe_map[this.ID3v1.genre] : "未知"
+                }
+            }
+        }
+
+        const App = Vue.createApp(_App).mount('#app');
+    </script>
+</body>
+
+</html>
